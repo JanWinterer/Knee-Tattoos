@@ -1,0 +1,15 @@
+# SKEL model files: licensed for personal non-commercial research, do not publish
+models/
+
+# Generated meshes, animations and renders
+output/
+*.blend1
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Editor / OS
+.idea/
+.DS_Store
