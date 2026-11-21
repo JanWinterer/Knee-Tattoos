@@ -1,13 +1,10 @@
 """
-Run the whole knee-bend pipeline: SKEL export -> check -> Blender scene. Works on macOS and Windows.
+Knee-bend pipeline: SKEL export -> check -> Blender scene, for one or all cases.
 
-Run from the repo root, with the project's Python environment:
     python run_knee_bend.py female left
-    python run_knee_bend.py all --force          (all four cases)
+    python run_knee_bend.py all --force    (all four cases, overwrite existing files)
 
-Output: output/knee_bend/knee_bend_anim_<gender>_<side>.npz and knee_bend_<gender>_<side>.blend
-(the ground-truth scene: frame n = SKEL pose n). For the smooth --visual animation, run
-scripts/blender_import_knee.py directly with another output name (see README).
+Output goes to output/knee_bend/.
 """
 import argparse
 import glob

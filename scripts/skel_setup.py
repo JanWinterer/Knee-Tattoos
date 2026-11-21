@@ -1,9 +1,5 @@
 """
-Load the SKEL model from this repo's models/skel/ folder.
-
-The `skel` package is installed with pip (see requirements.txt).
-Its default model path only works inside a clone of the SKEL repo, so every script here loads the model through load_skel().
-Set the SKEL_MODEL_PATH environment variable to use model files stored somewhere else.
+Load the SKEL model from models/skel/ (or from the SKEL_MODEL_PATH environment variable).
 """
 import os
 from pathlib import Path
