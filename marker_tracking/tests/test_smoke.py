@@ -2,7 +2,7 @@ import importlib
 
 import pytest
 
-MODULES = ['io', 'detect', 'lift', 'table', 'evaluate', 'run']
+MODULES = ['io', 'detect', 'lift', 'frame', 'table', 'camera_to_world', 'evaluate', 'run']
 
 
 @pytest.mark.parametrize('name', MODULES)

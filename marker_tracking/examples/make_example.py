@@ -1,6 +1,10 @@
-"""Write examples/markers_example.csv: fake tracker output in the real format.
+"""Write the example CSVs: fake tracker output in the real formats.
 
-For teammates building on markers.csv before the tracker works. The values are
+    examples/markers_camera_example.csv   camera frame
+    examples/markers_world_example.csv    global frame (identity: global = camera)
+    examples/markers_world_example.json   T_world_cam and its source
+
+For teammates building on the CSVs before the tracker works. The values are
 made up, but consistent: xyz is projected with the D456 K to get u, v.
 
     4 markers on a shank that swings 0 -> 90 deg about a "knee" 0.7 m in front of
@@ -16,7 +20,9 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-from marker_tracking.table import make_rows, write_csv  # noqa: E402
+from marker_tracking import frame as frame_tf  # noqa: E402
+from marker_tracking.table import (  # noqa: E402
+    make_camera_rows, make_world_rows, write_camera_csv, write_world_csv)
 
 FX, FY, CX, CY = 645.486328125, 644.7218017578125, 641.44970703125, 371.508178710938  # D456 colour
 FPS = 30
@@ -24,7 +30,9 @@ N_FRAMES = 46
 MARKER_IDS = [0, 1, 2, 3]
 KNEE = (0.0, -0.05, 0.70)                 # knee position in the camera frame [m]
 DIST_BELOW_KNEE = [0.05, 0.10, 0.15, 0.20]  # marker distance along the shank [m]
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'markers_example.csv')
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT_CAMERA = os.path.join(HERE, 'markers_camera_example.csv')
+OUT_WORLD = os.path.join(HERE, 'markers_world_example.csv')
 
 results = {}
 for frame in range(N_FRAMES):
@@ -38,9 +46,13 @@ for frame in range(N_FRAMES):
         valid = not (marker_id == 3 and 10 <= frame <= 14)
         results[(frame, marker_id)] = {
             'u_px': CX + FX * x / z, 'v_px': CY + FY * y / z,
-            'x_m': x, 'y_m': y, 'z_m': z,
+            'x_cam_m': x, 'y_cam_m': y, 'z_cam_m': z,
             'n_depth_px': 25 if valid else 2, 'valid': valid,
         }
 
-write_csv(make_rows(N_FRAMES, FPS, MARKER_IDS, results), OUT)
-print(f'wrote {OUT}')
+camera_rows = make_camera_rows(N_FRAMES, FPS, MARKER_IDS, results)
+write_camera_csv(camera_rows, OUT_CAMERA)
+T, source = frame_tf.load(None)
+write_world_csv(make_world_rows(camera_rows, T), OUT_WORLD, T, source)
+print(f'wrote {OUT_CAMERA}')
+print(f'wrote {OUT_WORLD}')
