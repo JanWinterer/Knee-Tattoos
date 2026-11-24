@@ -16,6 +16,7 @@ import numpy as np
 
 from marker_tracking import frame as frame_tf
 from marker_tracking import io
+from marker_tracking.trackers import get_tracker, list_trackers
 
 # Plausibility limits (warnings only)
 MIN_VALID_DEPTH_FRACTION = 0.10  # at least 10 % of pixels should have depth
@@ -94,6 +95,27 @@ def check_world(path, r):
     r.info.append(f'world.json: source {source}, camera at {np.round(T[:3, 3], 4).tolist()} m in the global frame')
 
 
+def check_markers(path, r):
+    """markers.json is optional; if present it must name a known tracker and ids that tracker can produce."""
+    if not path.is_file():
+        r.info.append('markers.json: none, the tracker must be given with --tracker')
+        return
+    try:
+        markers = io.read_markers(path)
+    except (ValueError, json.JSONDecodeError) as e:
+        r.errors.append(f'markers.json: {e}')
+        return
+    if markers['tracker'] not in list_trackers():
+        r.errors.append(f"markers.json: unknown tracker {markers['tracker']!r}, available: {list_trackers()}")
+        return
+    max_id = get_tracker(markers['tracker']).max_id()
+    impossible = [i for i in markers['ids'] if max_id is not None and i > max_id]
+    if impossible:
+        r.errors.append(f"markers.json: ids {impossible} do not exist for {markers['tracker']} (0..{max_id})")
+    size = f", {markers['size_m'] * 1000:g} mm" if markers['size_m'] else ''
+    r.info.append(f"markers.json: tracker {markers['tracker']}, ids {markers['ids']}{size}")
+
+
 def check_frame_files(folder, r):
     color = io.frame_indices(folder / io.COLOR_DIR)
     depth = io.frame_indices(folder / io.DEPTH_DIR)
@@ -154,6 +176,7 @@ def check_take(folder, every=1):
         return r
     cam = check_camera(data, r)
     check_world(folder / io.WORLD_FILE, r)
+    check_markers(folder / io.MARKERS_FILE, r)
     indices = check_frame_files(folder, r)
     if cam is None or not indices:
         return r

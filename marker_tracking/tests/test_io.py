@@ -5,8 +5,8 @@ import numpy as np
 import pytest
 
 from marker_tracking import frame
-from marker_tracking.io import (Camera, depth_to_png_values, load_take, write_take_camera,
-                                write_take_frame)
+from marker_tracking.io import (Camera, depth_to_png_values, load_take, read_markers, write_take_camera,
+                                write_take_frame, write_take_markers)
 
 W, H = 64, 48
 CAM = Camera(width=W, height=H, fps=30, fx=60.0, fy=60.0, cx=31.5, cy=23.5, depth_scale_m=0.0001,
@@ -112,3 +112,37 @@ def test_writer_rejects_bad_input(tmp_path):
         write_take_frame(tmp_path, 0, np.zeros((H, W), np.uint8), np.ones((H, W)), 0.001)  # grey
     with pytest.raises(ValueError):
         write_take_frame(tmp_path, 0, np.zeros((H, W, 3), np.uint8), np.ones((H, W + 1)), 0.001)  # size
+
+
+# ---- markers.json ----
+
+def test_markers_json_round_trip(tmp_path):
+    make_take(tmp_path)
+    write_take_markers(tmp_path, 'aruco_4x4_50', [3, 0, 1], size_m=0.03)
+    assert load_take(tmp_path).markers == {'tracker': 'aruco_4x4_50', 'ids': [0, 1, 3], 'size_m': 0.03}
+
+
+def test_markers_json_is_optional(tmp_path):
+    assert load_take(make_take(tmp_path)).markers is None
+
+
+def test_markers_json_without_size(tmp_path):
+    make_take(tmp_path)
+    write_take_markers(tmp_path, 'aruco_4x4_50', [0])
+    assert load_take(tmp_path).markers['size_m'] is None
+
+
+@pytest.mark.parametrize('content, message', [
+    ({'ids': [0]}, "'tracker'"),
+    ({'tracker': 'aruco_4x4_50'}, "'ids'"),
+    ({'tracker': 'aruco_4x4_50', 'ids': []}, "'ids'"),
+    ({'tracker': 'aruco_4x4_50', 'ids': [0, -1]}, "'ids'"),
+    ({'tracker': 'aruco_4x4_50', 'ids': [0, 1.5]}, "'ids'"),
+    ({'tracker': 'aruco_4x4_50', 'ids': [0, 0]}, 'duplicates'),
+    ({'tracker': 'aruco_4x4_50', 'ids': [0], 'size_m': 0}, "'size_m'"),
+])
+def test_bad_markers_json(tmp_path, content, message):
+    make_take(tmp_path)
+    (tmp_path / 'markers.json').write_text(json.dumps(content))
+    with pytest.raises(ValueError, match=message):
+        read_markers(tmp_path / 'markers.json')

@@ -7,6 +7,7 @@ Written by the Blender exporter, the D456 recorder or a test generator; read by 
     <take>/
         camera.json          intrinsics, image size, fps, depth units   (required)
         world.json           T_world_cam, see frame.py                  (optional, missing = identity)
+        markers.json         which markers are on the body               (optional, see below)
         color/000000.png     8-bit colour, 3 channels                   (one per frame)
         depth/000000.png     16-bit grey, depth aligned to color         (one per frame)
 
@@ -22,6 +23,15 @@ camera.json:
       "source": "blender"               # optional, free text: blender, d456, synthetic, ...
     }
 
+markers.json:
+    {
+      "tracker": "aruco_4x4_50",        # tracker that reads these markers, see trackers.list_trackers()
+      "ids": [0, 1, 2, 3],              # every marker on the body; each gets a row in every frame
+      "size_m": 0.03                    # optional, outer side of the marker [m] (for tracker extras)
+    }
+    Without it, the tracker has to be named on the command line and the
+    rows cover the ids that were detected somewhere in the take.
+
 Conventions:
     - Frames are numbered 000000, 000001, ... with no gaps; color/ and depth/ have the same numbers.
     - Camera frame = OpenCV: x right, y down, z forward (out of the lens), metres.
@@ -31,11 +41,13 @@ Conventions:
 Use:
     take = load_take('takes/knee_01')
     take.camera.K, take.T_world_cam, take.world_source, take.n_frames
+    take.markers                                # markers.json as a dict, or None
     for f in take:                              # or take.frame(i)
         f.index, f.time_s, f.color, f.depth_m   # color BGR uint8 (H, W, 3); depth_m float32 (H, W), 0 = none
 
     write_take_camera(folder, camera)           # create a take (for generators and recorders)
     write_take_frame(folder, i, color, depth_m, camera.depth_scale_m)
+    write_take_markers(folder, 'aruco_4x4_50', [0, 1, 2, 3], size_m=0.03)
 """
 import json
 from dataclasses import asdict, dataclass, field
@@ -49,6 +61,7 @@ from marker_tracking import frame as frame_tf
 FORMAT_VERSION = 1
 CAMERA_FILE = 'camera.json'
 WORLD_FILE = 'world.json'
+MARKERS_FILE = 'markers.json'
 COLOR_DIR = 'color'
 DEPTH_DIR = 'depth'
 REQUIRED_CAMERA_KEYS = ['format_version', 'width', 'height', 'fps', 'fx', 'fy', 'cx', 'cy', 'depth_scale_m']
@@ -138,6 +151,9 @@ class Take:
         world_path = self.folder / WORLD_FILE
         self.T_world_cam, self.world_source = frame_tf.load(world_path if world_path.is_file() else None)
 
+        markers_path = self.folder / MARKERS_FILE
+        self.markers = read_markers(markers_path) if markers_path.is_file() else None
+
         color = frame_indices(self.folder / COLOR_DIR)
         depth = frame_indices(self.folder / DEPTH_DIR)
         if color != depth:
@@ -167,6 +183,24 @@ def load_take(folder):
     return Take(folder)
 
 
+def read_markers(path):
+    """Read and check markers.json. Returns {'tracker': str, 'ids': sorted [int], 'size_m': float or None}."""
+    data = json.loads(Path(path).read_text())
+    tracker = data.get('tracker')
+    if not isinstance(tracker, str) or not tracker:
+        raise ValueError(f"{path}: 'tracker' must be a tracker name")
+    ids = data.get('ids')
+    if (not isinstance(ids, list) or not ids
+            or not all(isinstance(i, int) and not isinstance(i, bool) and i >= 0 for i in ids)):
+        raise ValueError(f"{path}: 'ids' must be a non-empty list of integers >= 0")
+    if len(set(ids)) != len(ids):
+        raise ValueError(f"{path}: 'ids' contains duplicates")
+    size_m = data.get('size_m')
+    if size_m is not None and not (isinstance(size_m, (int, float)) and size_m > 0):
+        raise ValueError(f"{path}: 'size_m' must be a positive number of metres")
+    return {'tracker': tracker, 'ids': sorted(ids), 'size_m': None if size_m is None else float(size_m)}
+
+
 # ---- writing (generators, recorders) ----
 
 def write_take_camera(folder, camera, T_world_cam=None, world_source='identity'):
@@ -177,6 +211,14 @@ def write_take_camera(folder, camera, T_world_cam=None, world_source='identity')
     (folder / CAMERA_FILE).write_text(json.dumps(camera.to_dict(), indent=2) + '\n')
     if T_world_cam is not None:
         frame_tf.save(folder / WORLD_FILE, T_world_cam, world_source)
+
+
+def write_take_markers(folder, tracker, ids, size_m=None):
+    """Write markers.json: the tracker for these markers, the ids on the body and (optionally) their size [m]."""
+    data = {'tracker': tracker, 'ids': sorted(int(i) for i in ids)}
+    if size_m is not None:
+        data['size_m'] = float(size_m)
+    (Path(folder) / MARKERS_FILE).write_text(json.dumps(data, indent=2) + '\n')
 
 
 def depth_to_png_values(depth_m, depth_scale_m):

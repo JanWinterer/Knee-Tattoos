@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from marker_tracking.check_take import check_take, main
+from marker_tracking.io import write_take_markers
 from test_io import CAM, make_take
 
 
@@ -128,3 +129,31 @@ def test_main_exit_code(tmp_path, capsys):
         main([str(tmp_path / 'missing')])
     assert e.value.code == 1
 
+
+
+# ---- markers.json ----
+
+def test_markers_json_is_reported(tmp_path):
+    make_take(tmp_path)
+    write_take_markers(tmp_path, 'aruco_4x4_50', [0, 1], size_m=0.03)
+    r = check_take(tmp_path)
+    assert r.ok, r.text()
+    assert 'markers.json: tracker aruco_4x4_50, ids [0, 1], 30 mm' in r.text()
+
+
+def test_markers_json_unknown_tracker(tmp_path):
+    make_take(tmp_path)
+    write_take_markers(tmp_path, 'no_such_tracker', [0])
+    assert 'unknown tracker' in errors_and_warnings(tmp_path)[0]
+
+
+def test_markers_json_id_the_tracker_cannot_produce(tmp_path):
+    make_take(tmp_path)
+    write_take_markers(tmp_path, 'aruco_4x4_50', [0, 60])
+    assert 'ids [60] do not exist for aruco_4x4_50 (0..49)' in errors_and_warnings(tmp_path)[0]
+
+
+def test_markers_json_broken(tmp_path):
+    make_take(tmp_path)
+    (tmp_path / 'markers.json').write_text('{"tracker": "aruco_4x4_50", "ids": "all"}')
+    assert 'markers.json' in errors_and_warnings(tmp_path)[0]

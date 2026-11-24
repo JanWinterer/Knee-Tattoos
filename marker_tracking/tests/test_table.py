@@ -1,13 +1,15 @@
 import csv
 import json
+import math
 import os
 
 import pytest
 
 from marker_tracking import frame
 from marker_tracking.camera_to_world import convert
-from marker_tracking.table import (CAMERA_COLUMNS, WORLD_COLUMNS, make_camera_rows, make_world_rows,
-                                   read_csv, write_camera_csv, write_world_csv)
+from marker_tracking.table import (CAMERA_COLUMNS, EXTRA_KEY_COLUMNS, WORLD_COLUMNS, make_camera_rows,
+                                   make_extra_rows, make_world_rows, read_csv, write_camera_csv,
+                                   write_extra_csv, write_world_csv)
 
 EXAMPLES = os.path.join(os.path.dirname(__file__), '..', 'examples')
 CAMERA_EXAMPLE = os.path.join(EXAMPLES, 'markers_camera_example.csv')
@@ -177,3 +179,21 @@ def test_committed_world_example_matches_camera_example():
         assert w['occluded'] == 1 - c['detected']
         assert w['valid'] == c['valid']
         assert (w['x_m'], w['y_m'], w['z_m']) == (c['x_cam_m'], c['y_cam_m'], c['z_cam_m'])  # identity
+
+
+# ---- extras table ----
+
+def test_extra_rows_sorted_with_time():
+    rows = make_extra_rows(10, {(1, 5): {'score': 0.5}, (0, 7): {'score': 0.25}, (1, 2): {}})
+    assert [(r['frame'], r['marker_id']) for r in rows] == [(0, 7), (1, 2), (1, 5)]
+    assert rows[2] == {'frame': 1, 'time_s': 0.1, 'marker_id': 5, 'score': 0.5}
+
+
+def test_extra_csv_round_trip_with_missing_values(tmp_path):
+    path = tmp_path / 'markers_extra.csv'
+    rows = make_extra_rows(30, {(0, 1): {'a': 1.25, 'b': -0.5}, (2, 1): {'a': 3.0}})
+    write_extra_csv(rows, ['a', 'b'], path)
+    assert read(path)[0] == EXTRA_KEY_COLUMNS + ['a', 'b']
+    back = read_csv(path)
+    assert (back[0]['a'], back[0]['b']) == (1.25, -0.5)
+    assert back[1]['a'] == 3.0 and math.isnan(back[1]['b'])  # not given -> empty cell -> nan

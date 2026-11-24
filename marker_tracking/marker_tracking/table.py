@@ -13,6 +13,11 @@ markers_world.csv: the input for SKEL, in the global frame.
         occluded = 1   marker not seen in this frame (= 1 - detected)
         valid = 1      x, y, z can be trusted; if valid = 0, x, y, z = 0
     A markers_world.json next to it records T_world_cam and its source.
+
+markers_extra.csv: tracker-specific extras (see the tracker's module), kept apart
+    so the two tables above stay identical for every tracker.
+    One row per kept detection: frame, time_s, marker_id, then the tracker's
+    extra_columns. A value the tracker did not give for a detection is left empty.
 """
 import csv
 import math
@@ -25,6 +30,7 @@ from marker_tracking import frame as frame_tf
 CAMERA_COLUMNS = ['frame', 'time_s', 'marker_id', 'detected', 'valid',
                   'u_px', 'v_px', 'x_cam_m', 'y_cam_m', 'z_cam_m', 'dist_m', 'n_depth_px']
 WORLD_COLUMNS = ['frame', 'time_s', 'marker_id', 'x_m', 'y_m', 'z_m', 'occluded', 'valid']
+EXTRA_KEY_COLUMNS = ['frame', 'time_s', 'marker_id']  # followed by the tracker's extra_columns
 
 _INT_COLUMNS = {'frame', 'marker_id', 'detected', 'valid', 'occluded', 'n_depth_px'}
 
@@ -69,6 +75,15 @@ def make_world_rows(camera_rows, T_world_cam):
     return rows
 
 
+def make_extra_rows(fps, extras):
+    """Build the extras rows, sorted by frame, then marker id.
+
+    extras: {(frame, marker_id): {column: value}}, the .extra of each kept detection.
+    """
+    return [{'frame': frame, 'time_s': frame / fps, 'marker_id': marker_id, **extras[(frame, marker_id)]}
+            for frame, marker_id in sorted(extras)]
+
+
 def write_camera_csv(rows, path):
     """Write camera rows with fixed decimals: time 1 us, pixels 0.001 px, xyz/dist 1 um."""
     with open(path, 'w', newline='') as f:
@@ -93,8 +108,22 @@ def write_world_csv(rows, path, T_world_cam, source):
     frame_tf.save(Path(path).with_suffix('.json'), T_world_cam, source)
 
 
+def write_extra_csv(rows, extra_columns, path):
+    """Write extras rows: time 1 us, extras with 6 decimals (1 um, 1 urad, 1e-6 px), missing values empty."""
+    with open(path, 'w', newline='') as f:
+        w = csv.writer(f)
+        w.writerow(EXTRA_KEY_COLUMNS + list(extra_columns))
+        for r in rows:
+            values = ['' if r.get(c) is None else f'{r[c]:.6f}' for c in extra_columns]
+            w.writerow([r['frame'], f"{r['time_s']:.6f}", r['marker_id']] + values)
+
+
 def read_csv(path):
-    """Read either CSV back into rows: ints for ids and flags, floats for the rest."""
+    """Read any of the three CSVs back into rows: ints for ids and flags, floats for the rest (empty -> nan)."""
+    def convert(key, value):
+        if key in _INT_COLUMNS:
+            return int(value)
+        return float(value) if value != '' else math.nan
+
     with open(path, newline='') as f:
-        return [{k: int(v) if k in _INT_COLUMNS else float(v) for k, v in r.items()}
-                for r in csv.DictReader(f)]
+        return [{k: convert(k, v) for k, v in r.items()} for r in csv.DictReader(f)]
