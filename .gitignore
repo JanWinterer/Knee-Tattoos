@@ -13,3 +13,5 @@ __pycache__/
 # Editor / OS
 .idea/
 .DS_Store
+# Recordings / takes (large, local only)
+videos/

@@ -64,6 +64,7 @@ WORLD_FILE = 'world.json'
 MARKERS_FILE = 'markers.json'
 COLOR_DIR = 'color'
 DEPTH_DIR = 'depth'
+COLOR_EXTS = ('.png', '.jpg', '.jpeg')  # depth stays .png only (16 bit, lossless)
 REQUIRED_CAMERA_KEYS = ['format_version', 'width', 'height', 'fps', 'fx', 'fy', 'cx', 'cy', 'depth_scale_m']
 
 
@@ -115,12 +116,21 @@ def frame_name(index):
     return f'{index:06d}.png'
 
 
-def frame_indices(folder):
+def frame_indices(folder, exts=('.png',)):
     """Sorted frame numbers found in a color/ or depth/ folder (files named 000123.png)."""
     folder = Path(folder)
     if not folder.is_dir():
         return []
-    return sorted(int(p.stem) for p in folder.glob('*.png') if p.stem.isdigit())
+    return sorted(int(p.stem) for p in folder.iterdir() if p.suffix.lower() in exts and p.stem.isdigit())
+
+
+def frame_path(folder, index, exts=('.png',)):
+    """Path of frame <index> in folder: the first existing extension of exts."""
+    for ext in exts:
+        path = Path(folder) / frame_name(index).replace('.png', ext)
+        if path.is_file():
+            return path
+    return Path(folder) / frame_name(index)
 
 
 def read_color(path):
@@ -154,7 +164,7 @@ class Take:
         markers_path = self.folder / MARKERS_FILE
         self.markers = read_markers(markers_path) if markers_path.is_file() else None
 
-        color = frame_indices(self.folder / COLOR_DIR)
+        color = frame_indices(self.folder / COLOR_DIR, COLOR_EXTS)
         depth = frame_indices(self.folder / DEPTH_DIR)
         if color != depth:
             raise ValueError(f'{self.folder}: color/ and depth/ have different frame numbers '
@@ -168,7 +178,7 @@ class Take:
             raise IndexError(f'frame {index} not in 0..{self.n_frames - 1}')
         name = frame_name(index)
         return Frame(index=index, time_s=index / self.camera.fps,
-                     color=read_color(self.folder / COLOR_DIR / name),
+                     color=read_color(frame_path(self.folder / COLOR_DIR, index, COLOR_EXTS)),
                      depth_m=read_depth(self.folder / DEPTH_DIR / name, self.camera.depth_scale_m))
 
     def __len__(self):
@@ -200,8 +210,6 @@ def read_markers(path):
         raise ValueError(f"{path}: 'size_m' must be a positive number of metres")
     return {'tracker': tracker, 'ids': sorted(ids), 'size_m': None if size_m is None else float(size_m)}
 
-
-# ---- writing (generators, recorders) ----
 
 def write_take_camera(folder, camera, T_world_cam=None, world_source='identity'):
     """Create the take folder, camera.json and (if T_world_cam is given) world.json."""

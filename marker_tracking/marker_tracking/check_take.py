@@ -117,7 +117,7 @@ def check_markers(path, r):
 
 
 def check_frame_files(folder, r):
-    color = io.frame_indices(folder / io.COLOR_DIR)
+    color = io.frame_indices(folder / io.COLOR_DIR, io.COLOR_EXTS)
     depth = io.frame_indices(folder / io.DEPTH_DIR)
     for name, idx in ((io.COLOR_DIR, color), (io.DEPTH_DIR, depth)):
         if not idx:
@@ -136,7 +136,7 @@ def check_frame_files(folder, r):
 def check_frame(folder, index, cam, r):
     """Check one frame pair. Returns (valid depth fraction, median depth m) or None."""
     name = io.frame_name(index)
-    color = cv2.imread(str(folder / io.COLOR_DIR / name), cv2.IMREAD_UNCHANGED)
+    color = cv2.imread(str(io.frame_path(folder / io.COLOR_DIR, index, io.COLOR_EXTS)), cv2.IMREAD_UNCHANGED)
     raw = cv2.imread(str(folder / io.DEPTH_DIR / name), cv2.IMREAD_UNCHANGED)
     if color is None:
         r.errors.append(f'frame {index}: cannot read colour image')

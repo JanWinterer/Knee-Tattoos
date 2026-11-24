@@ -12,7 +12,7 @@ Full specification in `marker_tracking/io.py`.
         camera.json          fx, fy, cx, cy [px], width, height, fps, depth_scale_m
         world.json           optional T_world_cam (missing = global frame is the camera frame)
         markers.json         optional: tracker name, marker ids on the body, marker size [m]
-        color/000000.png     8-bit colour
+        color/000000.png     8-bit colour, .png or .jpg
         depth/000000.png     16-bit, aligned to colour, depth_m = value * depth_scale_m, 0 = no depth
 
 Depth is z along the optical axis (OpenCV camera: x right, y down, z forward). Check a take with
